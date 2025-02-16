@@ -1,22 +1,40 @@
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
+import { API_ENDPOINTS } from '../../api/endpoints';
 
 export const loadMealData = async () => {
   try {
     // Load meal data
-    const mealResponse = await window.fs.readFile('meal.json');
-    const mealText = new TextDecoder().decode(mealResponse);
-    const mealData = JSON.parse(mealText);
+    const mealResponse = await fetch(API_ENDPOINTS.meals);
+    const mealData = await mealResponse.json();
 
     // Load instructions data
-    const instructionsResponse = await window.fs.readFile('instructions.json');
-    const instructionsText = new TextDecoder().decode(instructionsResponse);
-    const instructionsData = JSON.parse(instructionsText);
+    const instructionsResponse = await fetch(API_ENDPOINTS.instructions);
+    const instructionsData = await instructionsResponse.json();
 
-    return { mealData, instructionsData };
+    // Load bagging data
+    const baggingResponse = await fetch(API_ENDPOINTS.bagging);
+    const baggingData = await baggingResponse.json();
+
+    // Transform meal data into the required format
+    const transformedMeals = {
+      breakfast: Object.values(mealData).filter(meal => meal.type === 'breakfast'),
+      lunch: Object.values(mealData).filter(meal => meal.type === 'lunch'),
+      dinner: Object.values(mealData).filter(meal => meal.type === 'dinner')
+    };
+
+    return { 
+      mealData: transformedMeals, 
+      instructionsData: instructionsData,
+      baggingData: baggingData
+    };
   } catch (error) {
     console.error('Error loading data:', error);
-    return { mealData: { breakfast: [], lunch: [], dinner: [] }, instructionsData: {} };
+    return { 
+      mealData: { breakfast: [], lunch: [], dinner: [] }, 
+      instructionsData: {},
+      baggingData: {}
+    };
   }
 };
 
@@ -130,8 +148,8 @@ export const compileShoppingList = (homeMenus, instructions, homes) => {
           const mealInstructions = instructions[meal];
           if (mealInstructions) {
             const servingSize = home.residents <= 4 ? '4' : 
-                              home.residents <= 6 ? '6' :
-                              home.residents <= 8 ? '8' : '12';
+                             home.residents <= 6 ? '6' :
+                             home.residents <= 8 ? '8' : '12';
             
             mealInstructions[servingSize]?.shoppingList?.forEach(item => {
               allItems.add(item);
@@ -168,8 +186,8 @@ export const compilePrepList = (homeMenus, instructions, homes) => {
           const mealInstructions = instructions[meal];
           if (mealInstructions) {
             const servingSize = home.residents <= 4 ? '4' : 
-                              home.residents <= 6 ? '6' :
-                              home.residents <= 8 ? '8' : '12';
+                             home.residents <= 6 ? '6' :
+                             home.residents <= 8 ? '8' : '12';
             
             mealInstructions[servingSize]?.prep?.forEach(item => {
               allPrep.add(item);
