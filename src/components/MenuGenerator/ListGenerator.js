@@ -28,12 +28,25 @@ const ListGenerator = ({
   const generateShoppingListPDF = () => {
     const doc = new jsPDF();
     let yPos = 20;
+    const selectedHomeData = homes.find(home => home.id === selectedHome);
 
-    // Title
+    // Enhanced Header
     doc.setFontSize(16);
     doc.text('Shopping List', 20, yPos);
-    yPos += 20;
+    yPos += 15;
+    
+    // Add home info
+    doc.setFontSize(12);
+    doc.text(`Home: ${selectedHomeData?.name || 'All Homes'}`, 20, yPos);
+    yPos += 10;
+    doc.text(`Residents: ${selectedHomeData?.residentCount || 0}`, 20, yPos);
+    yPos += 10;
+    if (selectedHomeData?.dietaryRestrictions) {
+      doc.text(`Dietary Restrictions: ${selectedHomeData.dietaryRestrictions}`, 20, yPos);
+      yPos += 15;
+    }
 
+    // Rest of the shopping list
     doc.setFontSize(12);
     Object.entries(shoppingList).forEach(([category, items]) => {
       // Category header
@@ -55,19 +68,27 @@ const ListGenerator = ({
       yPos += 10;
     });
 
-    doc.save('shopping-list.pdf');
+    doc.save(`shopping-list-${selectedHomeData?.name || 'all'}.pdf`);
   };
 
   const generatePrepListPDF = () => {
     const doc = new jsPDF();
     let yPos = 20;
+    const selectedHomeData = homes.find(home => home.id === selectedHome);
 
-    // Title
+    // Enhanced Header
     doc.setFontSize(16);
     doc.text('Prep Instructions', 20, yPos);
-    yPos += 20;
+    yPos += 15;
 
-    // Items
+    // Add home info
+    doc.setFontSize(12);
+    doc.text(`Home: ${selectedHomeData?.name || 'All Homes'}`, 20, yPos);
+    yPos += 10;
+    doc.text(`Residents: ${selectedHomeData?.residentCount || 0}`, 20, yPos);
+    yPos += 15;
+
+    // Rest of the prep list
     doc.setFontSize(12);
     prepList.forEach((instruction, index) => {
       const lines = doc.splitTextToSize(`${index + 1}. ${instruction}`, 170);
@@ -81,7 +102,7 @@ const ListGenerator = ({
       });
     });
 
-    doc.save('prep-instructions.pdf');
+    doc.save(`prep-list-${selectedHomeData?.name || 'all'}.pdf`);
   };
 
   return (

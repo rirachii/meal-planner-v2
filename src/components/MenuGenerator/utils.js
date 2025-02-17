@@ -4,27 +4,13 @@ import { API_ENDPOINTS } from '../../api/endpoints';
 
 export const loadMealData = async () => {
   try {
-    // Load meal data
-    const mealResponse = await fetch(API_ENDPOINTS.meals);
-    const mealData = await mealResponse.json();
-
-    // Load instructions data
-    const instructionsResponse = await fetch(API_ENDPOINTS.instructions);
-    const instructionsData = await instructionsResponse.json();
-
-    // Load bagging data
-    const baggingResponse = await fetch(API_ENDPOINTS.bagging);
-    const baggingData = await baggingResponse.json();
-
-    // Transform meal data into the required format
-    const transformedMeals = {
-      breakfast: Object.values(mealData).filter(meal => meal.type === 'breakfast'),
-      lunch: Object.values(mealData).filter(meal => meal.type === 'lunch'),
-      dinner: Object.values(mealData).filter(meal => meal.type === 'dinner')
-    };
+    // Use imported data directly from API_ENDPOINTS
+    const mealData = API_ENDPOINTS.meals;
+    const instructionsData = API_ENDPOINTS.instructions;
+    const baggingData = API_ENDPOINTS.bagging;
 
     return { 
-      mealData: transformedMeals, 
+      mealData: mealData, 
       instructionsData: instructionsData,
       baggingData: baggingData
     };
@@ -49,28 +35,77 @@ export const processMasterSpreadsheet = async (file) => {
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
-        // Process homes data
-        const homes = jsonData.map(row => ({
-          id: row.HomeID,
-          name: row.HomeName,
-          residents: row.Residents,
-          dietaryRestrictions: row.DietaryRestrictions?.split(',').map(r => r.trim()) || []
-        }));
+        // Process homes data with validation
+        const homes = jsonData
+          .filter(row => row.home_id && (row.residents))
+          .map(row => ({
+            home_id: row.home_id,
+            residents: parseInt(row.residents) || -1,
+            phone: row.phone,
+            email: row.email,
+            breakfast_preferences: (row.breakfast_preferences || '').trim(),
+            lunch_preferences: (row.lunch_preferences || row.LunchPreferences || '').trim(),
+            dinner_preferences: (row.dinner_preferences || row.DinnerPreferences || '').trim(),
+            dietary_restrictions: (row.dietary_restrictions || row.DietaryRestrictions || 'none').trim()
+          }));
+
+        if (homes.length === 0) {
+          reject(new Error('No valid data found in the Excel file.'));
+          return;
+        }
         
-        // Calculate meal popularity
-        const mealCounts = {};
+        // Calculate meal popularity by type
+        const mealCountsByType = {
+          breakfast: {},
+          lunch: {},
+          dinner: {}
+        };
+
         jsonData.forEach(row => {
           Object.entries(row).forEach(([key, value]) => {
             if (value && typeof value === 'string' && key.startsWith('Meal')) {
-              mealCounts[value] = (mealCounts[value] || 0) + 1;
+              const mealType = key.includes('Breakfast') ? 'breakfast' :
+                             key.includes('Lunch') ? 'lunch' :
+                             key.includes('Dinner') ? 'dinner' : null;
+              
+              if (mealType) {
+                mealCountsByType[mealType][value] = (mealCountsByType[mealType][value] || 0) + 1;
+              }
             }
           });
         });
         
-        const popularityData = Object.entries(mealCounts)
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10);
+        const calculateMealPopularity = (homes, mealType, mealData) => {
+          const mealCounts = {};
+          const mealHomes = {};
+          
+          homes.forEach(home => {
+            const preferences = home[`${mealType}_preferences`]?.split(',') || [];
+            preferences.forEach(mealId => {
+              if (mealId) {
+                const meal = mealData[mealType].find(m => m.id === mealId);
+                if (meal) {
+                  mealCounts[meal.name] = (mealCounts[meal.name] || 0) + 1;
+                  if (!mealHomes[meal.name]) mealHomes[meal.name] = [];
+                  mealHomes[meal.name].push(home.phone);
+                }
+              }
+            });
+          });
+        
+          return Object.entries(mealCounts)
+            .map(([name, count]) => ({ 
+              name, 
+              count,
+              homes: mealHomes[name]
+            }))
+            .sort((a, b) => b.count - a.count);
+        };
+
+        const popularityData = ['breakfast', 'lunch', 'dinner'].map(type => ({
+          type,
+          meals: calculateMealPopularity(homes, type, API_ENDPOINTS.meals)
+        }));
         
         resolve({ homes, popularityData });
       } catch (error) {

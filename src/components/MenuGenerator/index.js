@@ -17,19 +17,41 @@ const MenuGenerator = () => {
   const [popularityData, setPopularityData] = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
   const [prepList, setPrepList] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadMealData().then(({ mealData, instructionsData }) => {
       setMeals(mealData);
       setInstructions(instructionsData);
+      // console.log(instructionsData)
     });
   }, []);
 
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-    const { homes, popularityData } = await processMasterSpreadsheet(file);
-    setHomes(homes);
-    setPopularityData(popularityData);
+    if (!file) {
+      console.log('No file selected');
+      return;
+    }
+
+    console.log('Processing file:', file.name);
+    try {
+      const { homes, popularityData } = await processMasterSpreadsheet(file);
+      console.log('Processed spreadsheet data:', { homes, popularityData });
+
+      if (homes.length === 0) {
+        console.error('No valid data found in the Excel file.');
+        setError('No valid data found in the Excel file.');
+        return;
+      }
+
+      setHomes(homes);
+      setPopularityData(popularityData);
+      console.log('Updated state with new data');
+    } catch (error) {
+      console.error('Error processing Excel file:', error);
+      setError('Error processing Excel file: ' + error.message);
+    }
   };
 
   return (
@@ -39,27 +61,35 @@ const MenuGenerator = () => {
           <h2 className="text-2xl font-bold">Menu Generator Portal</h2>
         </CardHeader>
         <CardContent>
-          <Input
-            type="file"
-            onChange={handleFileUpload}
-            accept=".xlsx,.xls"
-            className="mb-4"
-          />
-          
+          <div className="space-y-2">
+            <Input
+              type="file"
+              onChange={handleFileUpload}
+              accept=".xlsx,.xls"
+              className="mb-4"
+            />
+            {error && (
+              <p className="text-red-500 text-sm">{error}</p>
+            )}
           {homes.length > 0 && (
             <select
-              value={selectedHome?.id || ''}
-              onChange={(e) => setSelectedHome(homes.find(h => h.id === e.target.value))}
+              value={selectedHome?.home_id || ''}
+              onChange={(e) => {
+                const selectedHome = homes.find(h => h.home_id === e.target.value);
+                console.log('Selected home:', selectedHome);
+                setSelectedHome(selectedHome);
+              }}
               className="mb-4 p-2 border rounded"
             >
-              <option value="">Select a Home</option>
+              <option key="default" value="">Select a Home</option>
               {homes.map(home => (
-                <option key={home.id} value={home.id}>
-                  {home.name} ({home.residents} residents)
+                <option key={home.home_id} value={home.home_id}>
+                  {home.home_id} ({home.residents} residents)
                 </option>
               ))}
             </select>
           )}
+          </div>
         </CardContent>
       </Card>
 
